@@ -1,4 +1,6 @@
+import argparse
 import os
+from typing import cast
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -17,8 +19,13 @@ def main():
         api_key=api_key
     )
 
+    # Parse user argument
+    parser = argparse.ArgumentParser(description="AI Code Assistance")
+    _ = parser.add_argument("user_prompt", type=str, help="Prompt to send to the LLM")
+    args = parser.parse_args()
+    prompt = cast(str, args.user_prompt) # args.user_prompt is Any
+
     # Get a reponse
-    prompt = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
     response = client.chat.completions.create(
         model="openrouter/free",
         messages=[
