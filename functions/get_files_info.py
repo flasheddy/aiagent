@@ -16,6 +16,13 @@ def get_files_info(working_directory: str, directory: str = ".")-> str:
         # Validate `directory` exists
         if not os.path.isdir(target_dir):
             return f'Error: "{directory}" is not a directory'
-        return f'Success: "{directory}" is within the working directory'
+        # Process the target directory
+        files_info: list[str] = []
+        for item in os.listdir(target_dir):
+            item_path = os.path.normpath(os.path.join(target_dir, item))
+            size = os.path.getsize(item_path)
+            is_dir = os.path.isdir(item_path)
+            files_info.append(f"  - {item}: file_size={size} bytes, is_dir={is_dir}")
+        return "\n".join(files_info)
     except Exception as e:  # noqa: BLE001
-        return f"Error: {e}"
+        return f"Error: listing files: {e}"

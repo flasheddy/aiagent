@@ -8,6 +8,10 @@ def test() -> None:
             get_files_info("calculator", ".")
         ),
         (
+            "Result for 'pkg' direcotry:",
+            get_files_info("calculator", "pkg")
+        ),
+        (
             "Result for '/bin' direcotry:",
             get_files_info("calculator", "/bin")
         ),
@@ -15,10 +19,6 @@ def test() -> None:
             "Result for '../' direcotry:",
             get_files_info("calculator", "../")
         ),
-        (
-            "Result for 'main.py' direcotry:",
-            get_files_info("calculator", "main.py")
-        )
     ]
 
     lines = [f"{header}\n{body}" for header, body in results]
