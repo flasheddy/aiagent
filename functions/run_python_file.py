@@ -50,3 +50,27 @@ def run_python_file(
         return "\n".join(output)
     except Exception as e:  # noqa: BLE001
         return f"Error: executing Python file: {e}"
+
+
+schema_run_python_file = {
+    "type": "function",
+    "function": {
+        "name": "run_python_file",
+        "description": "Executes a Python file within the working directory and returns its output.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the Python file to execute, relative to the working directory",
+                },
+                "args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of arguments to pass to the script",
+                },
+            "required": ["file_path"],
+            },
+        },
+    },
+}
