@@ -1,11 +1,13 @@
 import argparse
+import json
 import os
 from typing import cast
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from openai.types.chat import ChatCompletion
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
+from functions.call_function import available_functions
 from prompts import system_prompt
 
 
@@ -39,13 +41,14 @@ def main():
         print(f"User prompt: {user_prompt}")
         print(f"Prompt tokens: {prompt_token_num}")
         print(f"Response tokens: {completion_token_num}")
-    print(f"Response:\n{get_content(res)}")
+    print(f"Response:\n{get_tool_calls(get_message(res))}")
 
 
 def get_response(client: OpenAI, messages: list[dict[str, str]]) -> ChatCompletion:
     response = client.chat.completions.create(
         model="openrouter/free",
         messages=messages,  # pyright: ignore[reportArgumentType]
+        tools=available_functions,  # pyright: ignore[reportArgumentType]
     )
     if not response:
         raise RuntimeError("Failed to make a request")
@@ -58,11 +61,34 @@ def get_token_usage(response: ChatCompletion) -> tuple[int, int]:
     return response.usage.prompt_tokens, response.usage.completion_tokens
 
 
-def get_content(response: ChatCompletion) -> str:
-    msg_text = response.choices[0].message.content
-    if not msg_text:
+def get_message(response: ChatCompletion) -> ChatCompletionMessage:
+    msg = response.choices[0].message
+    if not msg:
+        raise RuntimeError("The API response message appears to be malformed")
+    return msg
+
+
+def get_content(message: ChatCompletionMessage) -> str:
+    content = message.content
+    if not content:
         raise RuntimeError("The API response message content appears to be malformed")
-    return msg_text
+    return content
+
+
+def get_tool_calls(message: ChatCompletionMessage) -> str:
+    tool_calls = message.tool_calls
+    if not tool_calls:
+        return get_content(message)
+    function_dict = {
+        tool_call.function.name: json.loads(tool_call.function.arguments or "{}")
+        for tool_call in tool_calls
+        if tool_call.type == "function"
+    }
+    lines = [
+        f"Calling function: {func_name}({func_args})"
+        for func_name, func_args in function_dict.items()  # pyright: ignore[reportAny]
+    ]
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
