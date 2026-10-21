@@ -15,6 +15,7 @@ program's behaviour is observable from a single place.
 
 import argparse
 import os
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import cast
@@ -33,6 +34,7 @@ from prompts import system_prompt
 MODEL = "openrouter/free"
 BASE_URL = "https://openrouter.ai/api/v1"
 API_KEY_ENV = "OPENROUTER_API_KEY"
+MAX_ITERATIONS = 20
 
 # Injected effect: executes one tool call and returns a tool message.
 ToolExecutor = Callable[[ChatCompletionMessageFunctionToolCall, bool], dict[str, str]]
@@ -64,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     _ = parser.add_argument("user_prompt", type=str, help="Prompt to send to the LLM")
     # add verbose argument
     _ = parser.add_argument(
-        "--verbose", action="store_true", help="Enable verbose output"
+        "--verbose", action="store_true", help="Show the token usage report"
     )
     return parser
 
@@ -86,9 +88,9 @@ def require_api_key(environ: Mapping[str, str]) -> str:
     return api_key
 
 
-def build_messages(user_prompt: str) -> list[dict[str, str]]:
+def build_messages(user_prompt: str) -> list[ChatCompletionMessage]:
     """Compose the conversation seeded with the system prompt."""
-    return [
+    return [  # pyright: ignore[reportReturnType]
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
@@ -117,22 +119,15 @@ def get_content(message: ChatCompletionMessage) -> str:
     return content
 
 
-def format_tool_outputs(outputs: Sequence[str]) -> str:
-    """Render tool results as a readable block."""
-    if any(not output for output in outputs):
-        raise ValueError("The tool message's content cannot be empty")
-    return "\n\n".join(f"-> {output}" for output in outputs)
-
-
 def get_tool_calls_result(
     message: ChatCompletionMessage,
     verbose: bool = False,
     execute: ToolExecutor = call_function,
-) -> str:
+) -> list[dict[str, str]] | str:
     """Return the assistant's answer, executing any requested tool calls.
 
     The tool executor is injected so callers can substitute the effect without
-    changing this function's contract or the formatting it performs.
+    changing this function's contract.
     """
     tool_calls = message.tool_calls
     if not tool_calls:
@@ -142,12 +137,10 @@ def get_tool_calls_result(
         for tool_call in tool_calls
         if tool_call.type == "function"
     ]
-    return format_tool_outputs([tool_msg["content"] for tool_msg in tool_messages])
+    return tool_messages
 
 
-def format_verbose_report(
-    cli: CliArgs, usage: TokenUsage, response_text: str
-) -> str:
+def format_verbose_report(cli: CliArgs, usage: TokenUsage, response_text: str) -> str:
     """Build the verbose report as a single string."""
     return (
         f"User prompt: {cli.user_prompt}\n"
@@ -191,10 +184,27 @@ def get_response(client: OpenAI, messages: list[dict[str, str]]) -> ChatCompleti
 def main(argv: Sequence[str] | None = None) -> None:
     cli = parse_args(argv)
     client = create_client(load_api_key())
-    response = get_response(client, build_messages(cli.user_prompt))
-    tool_call_result = get_tool_calls_result(get_message(response), cli.verbose)
-    if cli.verbose:
-        print(format_verbose_report(cli, get_token_usage(response), tool_call_result))
+    messages = build_messages(cli.user_prompt)
+    # Agentic Loop
+    for _ in range(MAX_ITERATIONS):
+        response = get_response(client, messages)  # pyright: ignore[reportArgumentType]
+        msg = get_message(response)
+        messages.append(msg)
+        tool_call_result: list[dict[str, str]] | str = get_tool_calls_result(
+            msg, cli.verbose
+        )
+        if isinstance(tool_call_result, list):
+            messages.extend(tool_call_result)  # pyright: ignore[reportArgumentType]
+        else:
+            print(
+                format_verbose_report(cli, get_token_usage(response), tool_call_result)
+                if cli.verbose
+                else tool_call_result
+            )
+            return
+
+    print(f"Reached the maximum number of {MAX_ITERATIONS} iterations")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

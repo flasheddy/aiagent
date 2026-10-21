@@ -38,9 +38,7 @@ def parse_arguments(raw_arguments: str | None) -> dict[str, object] | None:
     return cast(dict[str, object], parsed)
 
 
-def format_call_log(
-    function_name: str, function_args: Mapping[str, object]
-) -> str:
+def format_call_log(function_name: str, function_args: Mapping[str, object]) -> str:
     """Render the verbose call line; performs no I/O."""
     return f" - Calling function: {function_name}({dict(function_args)})"
 
@@ -55,9 +53,9 @@ def call_function(
 ) -> dict[str, str]:
     """Execute one tool call and return the tool message.
 
-    Side effects are limited to one optional log line (``verbose``) and the tool
-    invocation itself. Invalid model output is reported as an error message
-    rather than raised, so one bad call cannot abort the conversation.
+    Side effects are limited to one log line and the tool invocation itself.
+    Invalid model output is reported as an error message rather than raised, so
+    one bad call cannot abort the conversation.
     """
     function_name = tool_call.function.name
     try:
@@ -75,8 +73,7 @@ def call_function(
     # Guard an unknown function
     if function_name not in function_map:
         return tool_message(tool_call.id, f"Error: Unknown function: {function_name}")
-    if verbose:
-        print(format_call_log(function_name, function_args))
+    print(format_call_log(function_name, function_args))
     try:
         # Inject the working directory for the agent to work; the model cannot
         # override it because the injection is applied last.
